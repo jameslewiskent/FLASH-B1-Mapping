@@ -1,12 +1,12 @@
 %% Reconstruct Data from TWIX
+% Please contact james.kent@ndcn.ox.ac.uk for access to raw Twix data
 clearvars
 close all
 main_directory = fileparts(matlab.desktop.editor.getActiveFilename);
 cd(main_directory); addpath(genpath(main_directory));
 n = 2; kernel = [5,5]; eig_thresh = 0.02;
 Desired_ro = 32; Desired_pe = 32;
-Voltages = 50:50:450;
-redo_image_recon = 0; % Re-run the image reconstruction
+redo_image_recon = 1; % Re-run the image reconstruction
 %% 2D MS SatTFL Recon
 clearvars -except n main_directory kernel eig_thresh Desired_ro Desired_pe Voltages redo_image_recon
 cd([main_directory,filesep,'SatTFL',filesep,'20231101b'])
@@ -17,11 +17,8 @@ if ~isfile('SatTFL_Reconstructed_B1Maps_Images.mat') || redo_image_recon == 1
         MID = MIDs(MID_n);
         twix = mapVBVD(MID);
         twix{1,n}.image.flagRemoveOS = true;
-        
-        if ~twix{1,n}.hdr.Phoenix.sTXSPEC.asNucleusInfo{1}.flReferenceAmplitude == Voltages(MID_n)
-            error('Voltages do not match!');
-        end
-        
+        Voltages(MID_n) = twix{1,n}.hdr.Phoenix.sTXSPEC.asNucleusInfo{1}.flReferenceAmplitude;
+
         kdata = squeeze(twix{1,n}.image(''));
         dims = twix{1,n}.image.sqzDims;
         
@@ -54,16 +51,19 @@ if ~isfile('SatTFL_Reconstructed_B1Maps_Images.mat') || redo_image_recon == 1
     nexttile; imagesc(imtile(abs(squeeze(Images(:,:,16,1,:))))); axis image off
     nexttile; imagesc(imtile(abs(squeeze(Images(:,:,16,2,:))))); axis image off
     
-    save('SatTFL_Reconstructed_B1Maps_Images.mat','Images');
+    % Flip SatTFL images to be in same orientation as other datasets
+    Images = flip(Images,3);    
+    
+    save('SatTFL_Reconstructed_B1Maps_Images.mat','Images','Voltages');
 else
-    load('SatTFL_Reconstructed_B1Maps_Images.mat','Images');
+    load('SatTFL_Reconstructed_B1Maps_Images.mat','Images','Voltages');
 end
 
 Mask = Generate_Mask(Images);
 save('SatTFL_Reconstructed_B1Maps_Images.mat','Mask','-append');
 
 Maps = zeros(Desired_ro,Desired_pe,32,length(MIDs));
-parfor MID_n = 1:length(MIDs)
+for MID_n = 1:length(MIDs)
     Maps(:,:,:,MID_n) = 180/pi.*acos(real(Images(:,:,:,2,MID_n)./Images(:,:,:,1,MID_n)));
 end
 save('SatTFL_Reconstructed_B1Maps_Images.mat','Maps','-append');
@@ -72,7 +72,7 @@ save('SatTFL_Reconstructed_B1Maps_Images.mat','Maps','-append');
 figure('color','w','Name','SatTFL B1 Maps'); imagesc(imtile(abs(squeeze(Maps(:,:,16,:)))),[0 150]); axis image off
 
 % Combine multi-voltage B1 maps
-[FAperV,FAperV_Combined,FAperV_Combined_SD] = Combine_Multivoltage_Datasets(Images,Maps,Mask,Voltages);
+[FAperV,FAperV_Combined,FAperV_Combined_SD] = Combine_Multivoltage_Datasets(Images,Maps,Mask,Voltages,1:5); % Do not include clipped saturation pulses (> 275 V)
 save('SatTFL_Reconstructed_B1Maps_Images.mat','FAperV','FAperV_Combined','FAperV_Combined_SD','-append');
 
 
@@ -80,16 +80,14 @@ save('SatTFL_Reconstructed_B1Maps_Images.mat','FAperV','FAperV_Combined','FAperV
 clearvars -except n main_directory kernel eig_thresh Desired_ro Desired_pe Voltages redo_image_recon
 cd([main_directory,filesep,'SA2RAGE',filesep,'20231101b']);
 MIDs = [93,94,95,96,97,98,99,100,101];
+
 if ~isfile('SA2RAGE_Reconstructed_B1Maps_Images.mat') || redo_image_recon == 1
     Images = zeros(Desired_ro,Desired_pe,32,2,length(MIDs));
     parfor MID_n = 1:length(MIDs)
         MID = MIDs(MID_n);
         twix = mapVBVD(MID);
         twix{1,n}.image.flagRemoveOS = true;
-        
-        if ~twix{1,n}.hdr.Phoenix.sTXSPEC.asNucleusInfo{1}.flReferenceAmplitude == Voltages(MID_n)
-            error('Voltages do not match!');
-        end
+        Voltages(MID_n) = twix{1,n}.hdr.Phoenix.sTXSPEC.asNucleusInfo{1}.flReferenceAmplitude;
         
         kdata = squeeze(twix{1,n}.image(''));
         dims = twix{1,n}.image.sqzDims;
@@ -126,9 +124,9 @@ if ~isfile('SA2RAGE_Reconstructed_B1Maps_Images.mat') || redo_image_recon == 1
     nexttile; imagesc(imtile(abs(squeeze(Images(:,:,16,1,:))))); axis image off
     nexttile; imagesc(imtile(abs(squeeze(Images(:,:,16,2,:))))); axis image off
     
-    save('SA2RAGE_Reconstructed_B1Maps_Images.mat','Images');
+    save('SA2RAGE_Reconstructed_B1Maps_Images.mat','Images','Voltages');
 else
-    load('SA2RAGE_Reconstructed_B1Maps_Images.mat','Images');
+    load('SA2RAGE_Reconstructed_B1Maps_Images.mat','Images','Voltages');
 end
 
 Mask = Generate_Mask(Images);
@@ -155,7 +153,7 @@ save('SA2RAGE_Reconstructed_B1Maps_Images.mat','Maps','-append');
 figure('color','w','Name','SA2RAGEs B1 Maps'); imagesc(imtile(abs(squeeze(Maps(:,:,16,:)))),[0 150]); axis image off
 
 % Combine multi-voltage B1 maps
-[FAperV,FAperV_Combined,FAperV_Combined_SD] = Combine_Multivoltage_Datasets(Images,Maps,Mask,Voltages);
+[FAperV,FAperV_Combined,FAperV_Combined_SD] = Combine_Multivoltage_Datasets(Images,Maps,Mask,Voltages,1:9);
 save('SA2RAGE_Reconstructed_B1Maps_Images.mat','FAperV','FAperV_Combined','FAperV_Combined_SD','-append');
 
 %% 3D Sandwich Recon
@@ -168,10 +166,7 @@ if ~isfile('Sandwich_Reconstructed_B1Maps_Images.mat') || redo_image_recon == 1
         MID = MIDs(MID_n);
         twix = mapVBVD(MID);
         twix{1,n}.image.flagRemoveOS = true;
-        
-        if ~twix{1,n}.hdr.Phoenix.sTXSPEC.asNucleusInfo{1}.flReferenceAmplitude == Voltages(MID_n)
-            error('Voltages do not match!');
-        end
+        Voltages(MID_n) = twix{1,n}.hdr.Phoenix.sTXSPEC.asNucleusInfo{1}.flReferenceAmplitude;
         
         kdata = squeeze(twix{1,n}.image(''));
         dims = twix{1,n}.image.sqzDims;
@@ -206,9 +201,9 @@ if ~isfile('Sandwich_Reconstructed_B1Maps_Images.mat') || redo_image_recon == 1
     nexttile; imagesc(imtile(abs(squeeze(Images(:,:,16,1,:))))); axis image off
     nexttile; imagesc(imtile(abs(squeeze(Images(:,:,16,2,:))))); axis image off
     
-    save('Sandwich_Reconstructed_B1Maps_Images.mat','Images');
+    save('Sandwich_Reconstructed_B1Maps_Images.mat','Images','Voltages');
 else
-    load('Sandwich_Reconstructed_B1Maps_Images.mat','Images');
+    load('Sandwich_Reconstructed_B1Maps_Images.mat','Images','Voltages');
 end
 
 Mask = Generate_Mask(Images);
@@ -235,5 +230,5 @@ save('Sandwich_Reconstructed_B1Maps_Images.mat','Maps','-append');
 figure('color','w','Name','Sandwich B1 Maps'); imagesc(imtile(abs(squeeze(Maps(:,:,16,:)))),[0 150]); axis image off
 
 % Combine multi-voltage B1 maps
-[FAperV,FAperV_Combined,FAperV_Combined_SD] = Combine_Multivoltage_Datasets(Images,Maps,Mask,Voltages);
+[FAperV,FAperV_Combined,FAperV_Combined_SD] = Combine_Multivoltage_Datasets(Images,Maps,Mask,Voltages,1:9);
 save('Sandwich_Reconstructed_B1Maps_Images.mat','FAperV','FAperV_Combined','FAperV_Combined_SD','-append');
